@@ -1,6 +1,7 @@
 
 export type Language = 'en' | 'hi';
 export type PaymentMethod = 'cod' | 'online';
+export type OrderStatus = 'Pending' | 'Processing' | 'Out for Delivery' | 'Completed' | 'Cancelled';
 
 export interface Product {
   id: string;
@@ -18,12 +19,12 @@ export interface CartItem extends Product {
 
 export interface Order {
   id: string;
+  customerPhone: string;
   items?: CartItem[];
   serviceDetails?: ServiceRequest;
   total: number;
   address: string;
-  phone: string;
-  status: 'pending' | 'processing' | 'ready' | 'shipped' | 'completed' | 'cancelled';
+  status: OrderStatus;
   date: string;
   type: 'product' | 'service';
   paymentMethod: PaymentMethod;
