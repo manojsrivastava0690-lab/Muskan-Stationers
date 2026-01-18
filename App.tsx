@@ -4,7 +4,8 @@ import {
   ShoppingCart, Search, User, Package, X, ChevronRight, 
   Plus, Minus, TrendingUp, ShoppingBag, CreditCard, Banknote, 
   LogOut, Clock, ShieldCheck, LayoutDashboard, Home, Briefcase, PlusCircle,
-  Edit2, Trash2, Camera, Layers, ArrowRight, Smartphone, BellRing, Upload, Image as ImageIcon
+  Edit2, Trash2, Camera, Layers, ArrowRight, Smartphone, BellRing, Upload, Image as ImageIcon,
+  Info, CheckCircle2
 } from 'lucide-react';
 import { Product, CartItem, Language, Order, PaymentMethod, Address } from './types';
 import { 
@@ -62,6 +63,12 @@ export default function App() {
   const [newAddr, setNewAddr] = useState({ label: 'Home', fullAddress: '', landmark: '' });
 
   const isAdmin = userPhone === ADMIN_PHONE;
+
+  // Bill Calculations
+  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const discount = Math.round(subtotal * 0.05); // 5% discount
+  const deliveryFee = subtotal > 99 ? 0 : 29;
+  const grandTotal = subtotal - discount + deliveryFee;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -158,8 +165,6 @@ export default function App() {
     }).filter(item => item.quantity > 0));
   };
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-
   const saveAddress = () => {
     if (!newAddr.fullAddress.trim()) {
       alert("Please provide a full address.");
@@ -188,7 +193,7 @@ export default function App() {
         id: `MS-${Math.floor(100000 + Math.random() * 900000)}`,
         customerPhone: userPhone,
         items: [...cart],
-        total: cartTotal,
+        total: grandTotal,
         deliveryAddress: currentAddr,
         status: 'Pending',
         date: new Date().toISOString(),
@@ -197,14 +202,18 @@ export default function App() {
         paymentId: pid
       };
       setOrders([newOrder, ...orders]);
-      let msg = `*NEW ORDER FROM MUSKAN*\nOrder ID: ${newOrder.id}\nTotal: ₹${newOrder.total}\nPayment: ${method.toUpperCase()}\nAddress: ${currentAddr.fullAddress}`;
+      
+      let itemsList = cart.map(i => `${i.name} (x${i.quantity})`).join('\n');
+      let billBreakdown = `MRP: ₹${subtotal}\nDiscount: -₹${discount}\nDelivery: ${deliveryFee === 0 ? 'FREE' : '₹' + deliveryFee}\nTotal: ₹${grandTotal}`;
+      let msg = `*NEW ORDER FROM MUSKAN*\nOrder ID: ${newOrder.id}\n\n*Items:*\n${itemsList}\n\n*Bill Summary:*\n${billBreakdown}\n\nPayment: ${method.toUpperCase()}\nAddress: ${currentAddr.fullAddress}`;
+      
       window.open(`https://wa.me/${SHOP_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
       setCart([]); setIsCartOpen(false); setView('account');
     };
 
     if (method === 'online') {
       const rzp = new (window as any).Razorpay({
-        key: RAZORPAY_KEY_ID, amount: cartTotal * 100, currency: "INR", name: "Muskan Store",
+        key: RAZORPAY_KEY_ID, amount: grandTotal * 100, currency: "INR", name: "Muskan Store",
         handler: (r: any) => finalize(r.razorpay_payment_id), prefill: { contact: userPhone },
         theme: { color: "#fbbf24" }
       });
@@ -567,10 +576,30 @@ export default function App() {
       {isCartOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-end">
           <div className="bg-white w-full rounded-t-[3rem] p-10 animate-slide-up max-h-[96vh] overflow-y-auto pb-40">
-            <div className="flex justify-between items-center mb-10 sticky top-0 bg-white py-2 z-10">
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white py-2 z-10">
               <h2 className="text-2xl font-extrabold tracking-tight">Checkout</h2>
               <button onClick={() => setIsCartOpen(false)} className="bg-gray-100 p-3 rounded-full active:scale-90 transition-all"><X size={20} /></button>
             </div>
+
+            {/* Delivery Progress Bar */}
+            {cart.length > 0 && (
+              <div className="mb-8 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Delivery Status</span>
+                  {subtotal > 99 ? (
+                    <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1"><CheckCircle2 size={12}/> Free Delivery unlocked!</span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-yellow-600 uppercase">Add ₹{100 - subtotal} for FREE Delivery</span>
+                  )}
+                </div>
+                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${subtotal > 99 ? 'bg-green-500' : 'bg-yellow-400'}`} 
+                    style={{ width: `${Math.min((subtotal / 100) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
             
             {cart.length === 0 ? <div className="text-center py-20 flex flex-col items-center">
               <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200"><ShoppingCart size={32}/></div>
@@ -611,6 +640,34 @@ export default function App() {
                    </div>
                 </div>
 
+                {/* Bill Details Section */}
+                <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                   <h3 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-5 border-b border-gray-200 pb-3">Bill Details</h3>
+                   <div className="space-y-4">
+                      <div className="flex justify-between items-center text-xs font-bold text-gray-600">
+                         <span>Item Total (MRP)</span>
+                         <span>₹{subtotal}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-bold text-green-600">
+                         <span>Store Discount (5%)</span>
+                         <span>-₹{discount}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-bold text-gray-600">
+                         <div className="flex items-center gap-1.5">
+                            Delivery Fee
+                            <Info size={12} className="text-gray-300" />
+                         </div>
+                         <span className={deliveryFee === 0 ? 'text-green-600' : 'text-gray-600'}>
+                           {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}
+                         </span>
+                      </div>
+                      <div className="pt-4 mt-2 border-t border-dashed border-gray-300 flex justify-between items-center">
+                         <span className="text-sm font-black text-gray-900 uppercase tracking-wider">To Pay</span>
+                         <span className="text-xl font-black text-gray-900 tracking-tighter">₹{grandTotal}</span>
+                      </div>
+                   </div>
+                </div>
+
                 {/* Payment Choice */}
                 <div>
                   <h3 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-4 px-1">Payment Selection</h3>
@@ -636,8 +693,8 @@ export default function App() {
                 <div className="pt-6">
                   <div className="bg-gray-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl">
                      <div className="flex flex-col">
-                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Grand Total</span>
-                       <p className="text-3xl font-black mt-1 tracking-tighter">₹{cartTotal}</p>
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Payable Amount</span>
+                       <p className="text-3xl font-black mt-1 tracking-tighter">₹{grandTotal}</p>
                      </div>
                      <button 
                       onClick={() => placeOrder(paymentMethod)} 
@@ -646,6 +703,9 @@ export default function App() {
                         Confirm
                      </button>
                   </div>
+                  <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest mt-6">
+                    Policy: Orders above ₹99 get Free Delivery
+                  </p>
                 </div>
               </div>
             )}
