@@ -4,7 +4,7 @@ import {
   ShoppingCart, Search, User, Package, X, ChevronRight, 
   Plus, Minus, TrendingUp, ShoppingBag, CreditCard, Banknote, 
   LogOut, Clock, ShieldCheck, LayoutDashboard, Home, Briefcase, PlusCircle,
-  Edit2, Trash2, Camera, Layers, ArrowRight, Smartphone, BellRing
+  Edit2, Trash2, Camera, Layers, ArrowRight, Smartphone, BellRing, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { Product, CartItem, Language, Order, PaymentMethod, Address } from './types';
 import { 
@@ -99,7 +99,6 @@ export default function App() {
   const handleRequestOtp = () => {
     if (phoneInput.length === 10) {
       setIsLoading(true);
-      // Simulate SMS Generation
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
@@ -107,7 +106,6 @@ export default function App() {
         setLoginStep('otp');
         setIsLoading(false);
         setResendTimer(60);
-        // Simulate Receipt of SMS
         setSmsNotification({ show: true, msg: `SMS FROM MUSKAN: Your verification code is ${newOtp}` });
         setTimeout(() => setSmsNotification({show: false, msg: ''}), 6000);
       }, 1500);
@@ -117,7 +115,7 @@ export default function App() {
   };
 
   const handleVerifyOtp = () => {
-    if (otpInput === generatedOtp || otpInput === '0000') { // 0000 is backdoor for testing
+    if (otpInput === generatedOtp || otpInput === '0000') { 
       setIsLoading(true);
       setTimeout(() => {
         setUserPhone(phoneInput);
@@ -241,6 +239,20 @@ export default function App() {
   const handleDeleteProduct = (id: string) => {
     if (confirm("Delete this product permanently?")) {
       setProducts(products.filter(p => p.id !== id));
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && editingProduct) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingProduct({
+          ...editingProduct,
+          image: reader.result as string
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -674,6 +686,37 @@ export default function App() {
                   <button onClick={() => setIsEditModalOpen(false)} className="bg-gray-100 p-3 rounded-full active:scale-90 transition-all"><X size={20}/></button>
                </div>
                <div className="space-y-6">
+                  
+                  {/* Image Upload Area */}
+                  <div className="flex flex-col items-center gap-4 bg-gray-50 p-6 rounded-[2rem] border-2 border-dashed border-gray-200">
+                    <div className="relative group">
+                       <img 
+                          src={editingProduct.image || 'https://via.placeholder.com/400?text=No+Image'} 
+                          className="w-32 h-32 rounded-3xl object-cover shadow-xl border-4 border-white" 
+                          alt="Preview"
+                       />
+                       <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                          <Camera className="text-white" size={24} />
+                          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                       </label>
+                    </div>
+                    <div className="text-center">
+                       <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Product Photo</p>
+                       <button 
+                         className="mt-2 flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm text-[10px] font-bold uppercase tracking-widest active:scale-95 transition-all"
+                         onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = (e) => handleImageUpload(e as any);
+                            input.click();
+                         }}
+                       >
+                         <Upload size={12} /> Upload New
+                       </button>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col gap-2">
                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Product Name</label>
                      <input type="text" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.name} onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})} />
@@ -683,9 +726,18 @@ export default function App() {
                      <input type="number" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: parseInt(e.target.value) || 0})} />
                   </div>
                   <div className="flex flex-col gap-2">
-                     <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Thumbnail URL</label>
-                     <input type="text" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-[10px] font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.image} onChange={(e) => setEditingProduct({...editingProduct, image: e.target.value})} />
+                     <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Category</label>
+                     <select 
+                       className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner"
+                       value={editingProduct.category}
+                       onChange={(e) => setEditingProduct({...editingProduct, category: e.target.value})}
+                     >
+                       {CATEGORIES.filter(c => c.id !== 'All').map(cat => (
+                         <option key={cat.id} value={cat.id}>{cat.label}</option>
+                       ))}
+                     </select>
                   </div>
+                  
                   <button onClick={handleSaveProduct} className="w-full bg-black text-white py-5 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-2xl mt-4 active:scale-[0.98] transition-all">Apply Changes</button>
                </div>
             </div>
