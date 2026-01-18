@@ -3,6 +3,13 @@ export type Language = 'en' | 'hi';
 export type PaymentMethod = 'cod' | 'online';
 export type OrderStatus = 'Pending' | 'Processing' | 'Out for Delivery' | 'Completed' | 'Cancelled';
 
+export interface Address {
+  id: string;
+  label: string; // Home, Office, Other
+  fullAddress: string;
+  landmark: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -23,7 +30,7 @@ export interface Order {
   items?: CartItem[];
   serviceDetails?: ServiceRequest;
   total: number;
-  address: string;
+  deliveryAddress: Address;
   status: OrderStatus;
   date: string;
   type: 'product' | 'service';
