@@ -14,7 +14,7 @@ import {
 } from './constants';
 
 const RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_HERE"; 
-const ADMIN_PHONE = "9794725337";
+const ADMIN_PHONE = "9616785816";
 
 const OFFERS = [
   { id: 1, title: "Student Special Sale", subtitle: "Up to 30% Off on Registers", image: "https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?w=800&auto=format&fit=crop" },
