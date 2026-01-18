@@ -1,5 +1,6 @@
 
 export type Language = 'en' | 'hi';
+export type PaymentMethod = 'cod' | 'online';
 
 export interface Product {
   id: string;
@@ -25,6 +26,8 @@ export interface Order {
   status: 'pending' | 'processing' | 'ready' | 'shipped' | 'completed' | 'cancelled';
   date: string;
   type: 'product' | 'service';
+  paymentMethod: PaymentMethod;
+  paymentId?: string;
 }
 
 export interface ServiceRequest {
