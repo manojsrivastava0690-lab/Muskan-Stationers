@@ -4,7 +4,7 @@ import {
   ShoppingCart, Search, User, Package, X, ChevronRight, 
   Plus, Minus, TrendingUp, ShoppingBag, CreditCard, Banknote, 
   LogOut, Clock, ShieldCheck, LayoutDashboard, Home, Briefcase, PlusCircle,
-  Edit2, Trash2, Camera, Layers
+  Edit2, Trash2, Camera, Layers, ArrowRight, Smartphone, BellRing
 } from 'lucide-react';
 import { Product, CartItem, Language, Order, PaymentMethod, Address } from './types';
 import { 
@@ -26,16 +26,28 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // App View State
   const [view, setView] = useState<'home' | 'admin' | 'account' | 'login'>(() => {
     return localStorage.getItem('muskan_user_phone') ? 'home' : 'login';
   });
+
+  // Login Logic States
+  const [loginStep, setLoginStep] = useState<'phone' | 'otp'>('phone');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+  const [smsNotification, setSmsNotification] = useState<{show: boolean, msg: string}>({show: false, msg: ''});
+  const [userPhone, setUserPhone] = useState<string>(localStorage.getItem('muskan_user_phone') || '');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Data States
   const [adminTab, setAdminTab] = useState<'orders' | 'inventory'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [currentOffer, setCurrentOffer] = useState(0);
-  const [userPhone, setUserPhone] = useState<string>(localStorage.getItem('muskan_user_phone') || '');
-  const [loginInput, setLoginInput] = useState('');
-
+  
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('muskan_catalog_v1');
     return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
@@ -59,6 +71,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+
+  useEffect(() => {
     const saved = localStorage.getItem('muskan_orders_v5');
     if (saved) setOrders(JSON.parse(saved));
   }, []);
@@ -76,31 +95,56 @@ export default function App() {
     if (addresses.length > 0 && !selectedAddressId) setSelectedAddressId(addresses[0].id);
   }, [addresses]);
 
-  const handleLogin = () => {
-    if (loginInput.length === 10) {
-      setUserPhone(loginInput);
-      localStorage.setItem('muskan_user_phone', loginInput);
-      if (loginInput === ADMIN_PHONE) setView('admin');
-      else setView('home');
+  // LOGIN FLOW
+  const handleRequestOtp = () => {
+    if (phoneInput.length === 10) {
+      setIsLoading(true);
+      // Simulate SMS Generation
+      const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      setGeneratedOtp(newOtp);
+      
+      setTimeout(() => {
+        setLoginStep('otp');
+        setIsLoading(false);
+        setResendTimer(60);
+        // Simulate Receipt of SMS
+        setSmsNotification({ show: true, msg: `SMS FROM MUSKAN: Your verification code is ${newOtp}` });
+        setTimeout(() => setSmsNotification({show: false, msg: ''}), 6000);
+      }, 1500);
     } else {
-      alert("Please enter a valid 10-digit number");
+      alert("Please enter a valid 10-digit phone number.");
+    }
+  };
+
+  const handleVerifyOtp = () => {
+    if (otpInput === generatedOtp || otpInput === '0000') { // 0000 is backdoor for testing
+      setIsLoading(true);
+      setTimeout(() => {
+        setUserPhone(phoneInput);
+        localStorage.setItem('muskan_user_phone', phoneInput);
+        setIsLoading(false);
+        if (phoneInput === ADMIN_PHONE) setView('admin');
+        else setView('home');
+      }, 1200);
+    } else {
+      alert("Invalid verification code. Please try again.");
     }
   };
 
   const handleLogout = () => {
-    if(confirm("Are you sure you want to Logout?")) {
-      // Clear storage
+    if(confirm("Are you sure you want to sign out?")) {
       localStorage.removeItem('muskan_user_phone');
-      // Reset state
       setUserPhone('');
-      setLoginInput('');
+      setPhoneInput('');
+      setOtpInput('');
+      setLoginStep('phone');
       setCart([]);
       setIsCartOpen(false);
-      // Redirect to login
       setView('login');
     }
   };
 
+  // CART & ORDERING
   const handleAddToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -118,39 +162,9 @@ export default function App() {
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  const handleSaveProduct = () => {
-    if (!editingProduct) return;
-    if (products.find(p => p.id === editingProduct.id)) {
-      setProducts(products.map(p => p.id === editingProduct.id ? editingProduct : p));
-    } else {
-      setProducts([...products, editingProduct]);
-    }
-    setIsEditModalOpen(false);
-    setEditingProduct(null);
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    if (confirm("Permanently delete this product from your inventory?")) {
-      setProducts(products.filter(p => p.id !== id));
-    }
-  };
-
-  const startAddingProduct = () => {
-    setEditingProduct({
-      id: `p-${Date.now()}`,
-      name: '',
-      nameHindi: '',
-      price: 0,
-      category: 'Pens',
-      image: 'https://images.unsplash.com/photo-1585336261022-680e295ce3fe?w=400&h=400&fit=crop',
-      description: ''
-    });
-    setIsEditModalOpen(true);
-  };
-
   const saveAddress = () => {
     if (!newAddr.fullAddress.trim()) {
-      alert("Address cannot be empty");
+      alert("Please provide a full address.");
       return;
     }
     const id = `addr-${Date.now()}`;
@@ -185,7 +199,7 @@ export default function App() {
         paymentId: pid
       };
       setOrders([newOrder, ...orders]);
-      let msg = `*NEW ORDER: ${newOrder.id}*\nTotal: ₹${newOrder.total}\nPayment: ${method}\nAddress: ${currentAddr.fullAddress}`;
+      let msg = `*NEW ORDER FROM MUSKAN*\nOrder ID: ${newOrder.id}\nTotal: ₹${newOrder.total}\nPayment: ${method.toUpperCase()}\nAddress: ${currentAddr.fullAddress}`;
       window.open(`https://wa.me/${SHOP_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
       setCart([]); setIsCartOpen(false); setView('account');
     };
@@ -212,29 +226,122 @@ export default function App() {
     else setView('account');
   };
 
+  // ADMIN ACTIONS
+  const handleSaveProduct = () => {
+    if (!editingProduct) return;
+    if (products.find(p => p.id === editingProduct.id)) {
+      setProducts(products.map(p => p.id === editingProduct.id ? editingProduct : p));
+    } else {
+      setProducts([...products, editingProduct]);
+    }
+    setIsEditModalOpen(false);
+    setEditingProduct(null);
+  };
+
+  const handleDeleteProduct = (id: string) => {
+    if (confirm("Delete this product permanently?")) {
+      setProducts(products.filter(p => p.id !== id));
+    }
+  };
+
+  const startAddingProduct = () => {
+    setEditingProduct({
+      id: `p-${Date.now()}`,
+      name: '',
+      nameHindi: '',
+      price: 0,
+      category: 'Pens',
+      image: 'https://images.unsplash.com/photo-1585336261022-680e295ce3fe?w=400&h=400&fit=crop',
+      description: ''
+    });
+    setIsEditModalOpen(true);
+  };
+
   return (
-    <div className="max-w-md mx-auto relative min-h-screen bg-white text-gray-900 overflow-x-hidden">
+    <div className="max-w-md mx-auto relative min-h-screen bg-white text-gray-900 overflow-x-hidden pb-safe">
       
-      {/* Login Screen */}
+      {/* Simulated SMS Notification */}
+      {smsNotification.show && (
+        <div className="fixed top-4 left-4 right-4 z-[200] animate-slide-up">
+           <div className="bg-black/90 text-white p-4 rounded-2xl shadow-2xl flex items-start gap-4 border border-white/10 backdrop-blur-md">
+              <div className="bg-yellow-400 p-2 rounded-lg"><BellRing size={16} className="text-black" /></div>
+              <div className="flex-1">
+                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Messages • Just now</p>
+                 <p className="text-xs font-semibold mt-0.5">{smsNotification.msg}</p>
+              </div>
+              <button onClick={() => setSmsNotification({show: false, msg: ''})} className="text-gray-500"><X size={14} /></button>
+           </div>
+        </div>
+      )}
+
+      {/* Login Screen (OTP Flow) */}
       {view === 'login' && (
         <div className="p-8 flex flex-col justify-center min-h-screen animate-scale-in">
-           <div className="bg-yellow-400 w-14 h-14 rounded-2xl flex items-center justify-center mb-8 shadow-xl shadow-yellow-100">
-             <ShoppingBag className="text-white" size={28} />
+           <div className="bg-yellow-400 w-16 h-16 rounded-3xl flex items-center justify-center mb-10 shadow-2xl shadow-yellow-100 rotate-3">
+             <Smartphone className="text-white" size={32} />
            </div>
-           <h1 className="text-2xl font-bold mb-2 tracking-tight">Login to Account</h1>
-           <p className="text-gray-500 mb-10 text-sm font-medium">Please enter your 10-digit phone number.</p>
-           <div className="space-y-4">
-             <div className="relative">
-               <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">+91</span>
-               <input 
-                 type="tel" maxLength={10} placeholder="Mobile Number" 
-                 className="w-full bg-gray-50 py-4 pl-14 pr-5 rounded-xl font-bold text-sm outline-none border-2 border-transparent focus:border-yellow-400 transition-all shadow-inner"
-                 value={loginInput} onChange={(e) => setLoginInput(e.target.value.replace(/\D/g,''))}
-               />
+           
+           {loginStep === 'phone' ? (
+             <div className="space-y-6 animate-scale-in">
+               <div>
+                 <h1 className="text-3xl font-extrabold tracking-tight">Sign In</h1>
+                 <p className="text-gray-500 mt-2 text-sm">Enter your phone number to receive a verification SMS.</p>
+               </div>
+               <div className="space-y-4">
+                 <div className="relative">
+                   <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm border-r pr-3 border-gray-200">+91</span>
+                   <input 
+                     type="tel" maxLength={10} placeholder="000 000 0000" 
+                     className="w-full bg-gray-50 py-5 pl-16 pr-5 rounded-2xl font-bold text-base outline-none border-2 border-transparent focus:border-yellow-400 transition-all shadow-inner"
+                     value={phoneInput} onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g,''))}
+                   />
+                 </div>
+                 <button 
+                  onClick={handleRequestOtp} 
+                  disabled={isLoading}
+                  className="w-full bg-yellow-400 text-white py-5 rounded-2xl font-bold shadow-xl shadow-yellow-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                 >
+                   {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Send Verification Code'}
+                 </button>
+                 <button onClick={() => setView('home')} className="w-full text-gray-400 font-bold text-xs uppercase tracking-widest pt-2">Skip for Now</button>
+               </div>
              </div>
-             <button onClick={handleLogin} className="w-full bg-yellow-400 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all">Continue</button>
-             <button onClick={() => setView('home')} className="w-full text-gray-400 font-bold text-xs">Browse as Guest</button>
-           </div>
+           ) : (
+             <div className="space-y-6 animate-scale-in">
+               <div>
+                 <h1 className="text-3xl font-extrabold tracking-tight">Verify Code</h1>
+                 <p className="text-gray-500 mt-2 text-sm">A 4-digit code has been sent to <b>+91 {phoneInput}</b></p>
+               </div>
+               <div className="space-y-4">
+                 <div className="flex justify-between gap-4">
+                    <input 
+                      type="tel" maxLength={4} placeholder="0000"
+                      className="w-full bg-gray-50 py-5 px-5 rounded-2xl font-bold text-2xl text-center tracking-[1em] outline-none border-2 border-transparent focus:border-yellow-400 transition-all shadow-inner"
+                      value={otpInput} onChange={(e) => setOtpInput(e.target.value.replace(/\D/g,''))}
+                    />
+                 </div>
+                 <button 
+                  onClick={handleVerifyOtp} 
+                  disabled={isLoading}
+                  className="w-full bg-black text-white py-5 rounded-2xl font-bold shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                 >
+                   {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Verify & Continue'}
+                 </button>
+                 
+                 <div className="pt-2 text-center">
+                   {resendTimer > 0 ? (
+                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-center gap-2">
+                       <Clock size={12} /> Resend available in {resendTimer}s
+                     </p>
+                   ) : (
+                     <button onClick={handleRequestOtp} className="text-yellow-600 font-bold text-[10px] uppercase tracking-widest border-b border-yellow-200 pb-0.5">Resend SMS</button>
+                   )}
+                 </div>
+
+                 <button onClick={() => setLoginStep('phone')} className="w-full text-gray-400 font-bold text-xs uppercase tracking-widest pt-4 flex items-center justify-center gap-1"><ChevronRight size={14} className="rotate-180"/> Use different number</button>
+               </div>
+             </div>
+           )}
         </div>
       )}
 
@@ -246,29 +353,29 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <div className="bg-yellow-400 p-2 rounded-xl shadow-lg shadow-yellow-100"><ShoppingBag className="text-white" size={20} /></div>
                 <div>
-                  <h1 className="font-bold text-lg leading-none">Muskan</h1>
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Gonda City Service</p>
+                  <h1 className="font-bold text-lg tracking-tight leading-none">Muskan</h1>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Premium Stationery Hub</p>
                 </div>
               </div>
-              <button onClick={goToAccount} className="w-9 h-9 bg-yellow-50 rounded-full flex items-center justify-center border-2 border-white shadow active:scale-90 transition-all">
+              <button onClick={goToAccount} className="w-10 h-10 bg-yellow-50 rounded-full flex items-center justify-center border-2 border-white shadow-sm active:scale-90 transition-all">
                 <User size={18} className="text-yellow-600"/>
               </button>
             </div>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-              <input type="text" placeholder="Search school items..." className="w-full bg-gray-100/70 rounded-xl py-3 pl-11 pr-4 outline-none border border-transparent focus:border-yellow-300 transition-all font-semibold text-sm shadow-inner" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <input type="text" placeholder="Search school or office items..." className="w-full bg-gray-100/70 rounded-2xl py-3.5 pl-11 pr-4 outline-none border border-transparent focus:border-yellow-300 transition-all font-semibold text-sm shadow-inner" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </header>
 
-          {/* Offers */}
-          <div className="px-5 mt-4">
-            <div className="relative h-44 rounded-2xl overflow-hidden shadow-lg">
+          {/* Banner Slider */}
+          <div className="px-5 mt-5">
+            <div className="relative h-48 rounded-3xl overflow-hidden shadow-2xl shadow-gray-200">
                {OFFERS.map((off, i) => (
-                 <div key={off.id} className={`absolute inset-0 transition-all duration-700 ease-in-out ${i === currentOffer ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
+                 <div key={off.id} className={`absolute inset-0 transition-all duration-700 ease-in-out ${i === currentOffer ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
                     <img src={off.image} className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex flex-col justify-center px-8 text-white">
-                       <h2 className="text-xl font-bold leading-tight">{off.title}</h2>
-                       <p className="text-[11px] font-medium opacity-80 mt-1">{off.subtitle}</p>
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex flex-col justify-center px-10 text-white">
+                       <h2 className="text-2xl font-extrabold leading-tight">{off.title}</h2>
+                       <p className="text-xs font-medium opacity-80 mt-1.5 uppercase tracking-wider">{off.subtitle}</p>
                     </div>
                  </div>
                ))}
@@ -277,29 +384,29 @@ export default function App() {
 
           {/* Categories */}
           <div className="px-5 py-8">
-             <div className="flex gap-4 overflow-x-auto hide-scrollbar">
+             <div className="flex gap-5 overflow-x-auto hide-scrollbar">
                 {CATEGORIES.map(cat => (
-                  <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className="flex-shrink-0 flex flex-col items-center gap-2">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl transition-all duration-300 ${activeCategory === cat.id ? 'bg-yellow-400 text-white scale-110 shadow-lg shadow-yellow-100' : 'bg-gray-100 text-gray-400'}`}>
+                  <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className="flex-shrink-0 flex flex-col items-center gap-2.5">
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl transition-all duration-300 ${activeCategory === cat.id ? 'bg-yellow-400 text-white scale-110 shadow-xl shadow-yellow-100' : 'bg-gray-50 text-gray-400'}`}>
                       {cat.icon}
                     </div>
-                    <span className={`text-[10px] font-bold uppercase ${activeCategory === cat.id ? 'text-black' : 'text-gray-400'}`}>{cat.label}</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${activeCategory === cat.id ? 'text-black' : 'text-gray-400'}`}>{cat.label}</span>
                   </button>
                 ))}
              </div>
           </div>
 
-          {/* Product Grid */}
-          <div className="px-5 grid grid-cols-2 gap-4">
+          {/* Products */}
+          <div className="px-5 grid grid-cols-2 gap-5">
             {filteredProducts.map(p => (
-              <div key={p.id} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm flex flex-col hover:shadow-md transition-shadow">
-                <div className="relative mb-3 rounded-lg overflow-hidden">
-                  <img src={p.image} className="w-full aspect-square object-cover" />
+              <div key={p.id} className="bg-white rounded-3xl p-3 border border-gray-100 shadow-sm flex flex-col hover:shadow-xl transition-all group">
+                <div className="relative mb-3 rounded-2xl overflow-hidden bg-gray-50">
+                  <img src={p.image} className="w-full aspect-square object-cover transition-transform group-hover:scale-110" />
                 </div>
-                <h3 className="font-bold text-xs truncate mb-1">{p.name}</h3>
-                <div className="flex justify-between items-center mt-auto pt-2">
-                  <span className="font-bold text-sm">₹{p.price}</span>
-                  <button onClick={() => handleAddToCart(p)} className="bg-gray-900 text-white w-8 h-8 rounded-lg flex items-center justify-center active:bg-yellow-400 transition-all"><Plus size={16} /></button>
+                <h3 className="font-bold text-xs px-1 line-clamp-1">{p.name}</h3>
+                <div className="flex justify-between items-center mt-auto pt-3 px-1 pb-1">
+                  <span className="font-extrabold text-sm text-gray-900">₹{p.price}</span>
+                  <button onClick={() => handleAddToCart(p)} className="bg-gray-900 text-white w-9 h-9 rounded-xl flex items-center justify-center active:bg-yellow-400 active:scale-90 transition-all shadow-md shadow-gray-200"><Plus size={18} /></button>
                 </div>
               </div>
             ))}
@@ -308,107 +415,118 @@ export default function App() {
       )}
 
       {/* Admin Panel */}
-      {view === 'admin' && (
+      {view === 'admin' && (isAdmin ? (
         <div className="p-5 pb-32 animate-slide-up">
            <header className="flex items-center justify-between mb-8 sticky top-0 py-3 glass -mx-5 px-5 z-20">
               <div className="flex items-center gap-2">
                  <ShieldCheck size={20} className="text-yellow-600"/>
-                 <h1 className="text-lg font-bold">Admin Console</h1>
+                 <h1 className="text-lg font-bold">Admin Panel</h1>
               </div>
-              <button onClick={handleLogout} className="text-red-500 font-bold text-[10px] uppercase tracking-wider bg-red-50 px-3 py-2 rounded-lg">Logout</button>
+              <button onClick={handleLogout} className="text-red-500 font-bold text-[10px] uppercase tracking-widest bg-red-50 px-3 py-2 rounded-xl">Logout</button>
            </header>
 
-           <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
-              <button onClick={() => setAdminTab('orders')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${adminTab === 'orders' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>Orders</button>
-              <button onClick={() => setAdminTab('inventory')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${adminTab === 'inventory' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>Inventory</button>
+           <div className="flex bg-gray-100 p-1 rounded-2xl mb-8">
+              <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${adminTab === 'orders' ? 'bg-white text-black shadow-md' : 'text-gray-400'}`}>Active Orders</button>
+              <button onClick={() => setAdminTab('inventory')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${adminTab === 'inventory' ? 'bg-white text-black shadow-md' : 'text-gray-400'}`}>Inventory Manager</button>
            </div>
 
            {adminTab === 'orders' ? (
              <div className="space-y-4">
-                {orders.length === 0 ? <p className="text-center py-20 text-gray-300 font-bold">No active orders</p> : orders.map(o => (
-                  <div key={o.id} className="bg-gray-50 border border-gray-100 p-4 rounded-xl space-y-3">
+                {orders.length === 0 ? <p className="text-center py-20 text-gray-300 font-bold">No orders found.</p> : orders.map(o => (
+                  <div key={o.id} className="bg-gray-50 border border-gray-100 p-5 rounded-3xl space-y-4">
                      <div className="flex justify-between items-center">
-                       <span className="text-[9px] font-bold text-gray-400 tracking-widest uppercase">{o.id}</span>
+                       <span className="text-[10px] font-extrabold text-gray-400 tracking-widest uppercase">{o.id}</span>
                        <select 
                          value={o.status} 
                          onChange={(e) => setOrders(orders.map(item => item.id === o.id ? {...item, status: e.target.value as any} : item))}
-                         className="text-[10px] font-bold uppercase bg-white px-2 py-1 rounded border border-gray-200"
+                         className="text-[10px] font-bold uppercase bg-white px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm outline-none"
                        >
                           <option>Pending</option>
                           <option>Processing</option>
                           <option>Completed</option>
+                          <option>Cancelled</option>
                        </select>
                      </div>
                      <div className="text-[11px] font-medium text-gray-600">
-                        <p className="font-bold text-black leading-tight">📍 {o.deliveryAddress.fullAddress}</p>
-                        <p className="opacity-70 mt-1 font-bold">📞 {o.customerPhone}</p>
+                        <p className="font-bold text-black leading-tight text-xs">📍 {o.deliveryAddress.fullAddress}</p>
+                        <p className="opacity-70 mt-1 font-bold text-gray-400">📞 {o.customerPhone}</p>
                      </div>
-                     <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                        <p className="font-bold text-lg">₹{o.total}</p>
-                        <span className="text-[9px] font-bold uppercase bg-white px-2 py-1 rounded border">{o.paymentMethod}</span>
+                     <div className="flex justify-between items-center pt-3 border-t border-gray-200">
+                        <p className="font-extrabold text-xl">₹{o.total}</p>
+                        <span className="text-[9px] font-bold uppercase bg-white px-3 py-1.5 rounded-lg border text-gray-500">{o.paymentMethod}</span>
                      </div>
                   </div>
                 ))}
              </div>
            ) : (
              <div className="space-y-4">
-                <button onClick={startAddingProduct} className="w-full bg-black text-white py-4 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 mb-4 shadow-lg"><PlusCircle size={16}/> Add New Product</button>
+                <button onClick={startAddingProduct} className="w-full bg-black text-white py-5 rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 mb-6 shadow-2xl"><PlusCircle size={18}/> Add New Inventory</button>
                 {products.map(p => (
-                  <div key={p.id} className="flex items-center gap-4 bg-white border border-gray-100 p-3 rounded-xl shadow-sm">
-                     <img src={p.image} className="w-12 h-12 rounded-lg object-cover" />
+                  <div key={p.id} className="flex items-center gap-4 bg-white border border-gray-100 p-3 rounded-2xl shadow-sm">
+                     <img src={p.image} className="w-14 h-14 rounded-xl object-cover" />
                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold truncate">{p.name}</p>
-                        <p className="text-[10px] font-bold text-yellow-600 mt-0.5">₹{p.price}</p>
+                        <p className="text-xs font-bold truncate text-gray-900">{p.name}</p>
+                        <p className="text-[10px] font-bold text-yellow-600 mt-1">₹{p.price}</p>
                      </div>
                      <div className="flex gap-2">
-                        <button onClick={() => { setEditingProduct(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-50 rounded-lg text-gray-500 hover:text-yellow-600"><Edit2 size={14}/></button>
-                        <button onClick={() => handleDeleteProduct(p.id)} className="p-2 bg-gray-50 text-red-400 rounded-lg"><Trash2 size={14}/></button>
+                        <button onClick={() => { setEditingProduct(p); setIsEditModalOpen(true); }} className="p-2.5 bg-gray-50 text-gray-500 rounded-xl active:text-yellow-600"><Edit2 size={16}/></button>
+                        <button onClick={() => handleDeleteProduct(p.id)} className="p-2.5 bg-gray-50 text-red-400 rounded-xl active:bg-red-50"><Trash2 size={16}/></button>
                      </div>
                   </div>
                 ))}
              </div>
            )}
         </div>
-      )}
+      ) : <div className="p-8 text-center text-gray-400 font-bold">Unauthorized Access</div>)}
 
       {/* Account View */}
       {view === 'account' && (
         <div className="p-5 pb-32 animate-slide-up">
            <header className="flex items-center justify-between mb-10">
-              <button onClick={() => setView('home')} className="bg-gray-100 p-2 rounded-lg"><ChevronRight size={20} className="rotate-180"/></button>
-              <h2 className="text-lg font-bold">My Account</h2>
-              <button onClick={handleLogout} className="text-red-500 font-bold text-[10px] uppercase tracking-wider bg-red-50 px-3 py-2 rounded-lg">Logout</button>
+              <button onClick={() => setView('home')} className="bg-gray-50 p-3 rounded-xl active:scale-90 transition-all"><ChevronRight size={20} className="rotate-180"/></button>
+              <h2 className="text-lg font-extrabold tracking-tight">My Profile</h2>
+              <button onClick={handleLogout} className="text-red-500 font-bold text-[10px] uppercase tracking-widest bg-red-50 px-3 py-2 rounded-xl">Logout</button>
            </header>
            
-           <div className="space-y-10">
+           <div className="space-y-12">
+              <div className="bg-yellow-50 p-6 rounded-[2.5rem] flex items-center gap-4">
+                 <div className="w-16 h-16 bg-yellow-400 rounded-3xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                    {userPhone.slice(-2)}
+                 </div>
+                 <div>
+                    <p className="text-xs font-bold text-yellow-600 uppercase tracking-widest">Active Customer</p>
+                    <p className="text-xl font-extrabold tracking-tight mt-1">+91 {userPhone}</p>
+                 </div>
+              </div>
+
               <div>
-                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-sm">Saved Addresses</h3>
+                 <div className="flex justify-between items-center mb-5 px-1">
+                    <h3 className="font-extrabold text-sm uppercase tracking-wider text-gray-400">Saved Addresses</h3>
                     <button onClick={() => setIsAddingAddress(true)} className="text-yellow-600 text-[10px] font-bold uppercase tracking-widest">+ Add New</button>
                  </div>
-                 <div className="space-y-3">
-                    {addresses.length === 0 ? <p className="text-xs text-gray-300">No saved addresses found.</p> : addresses.map(a => (
-                       <div key={a.id} onClick={() => setSelectedAddressId(a.id)} className={`p-4 rounded-xl border-2 transition-all ${selectedAddressId === a.id ? 'border-yellow-400 bg-yellow-50 shadow-sm' : 'border-gray-100 bg-white'}`}>
-                          <div className="flex items-center gap-2 mb-1">
-                             {a.label === 'Home' ? <Home size={12}/> : <Briefcase size={12}/>}
-                             <span className="text-[10px] font-bold uppercase">{a.label}</span>
+                 <div className="space-y-4">
+                    {addresses.length === 0 ? <p className="text-xs text-gray-300 italic">No addresses saved yet.</p> : addresses.map(a => (
+                       <div key={a.id} onClick={() => setSelectedAddressId(a.id)} className={`p-5 rounded-[2rem] border-2 transition-all cursor-pointer ${selectedAddressId === a.id ? 'border-yellow-400 bg-yellow-50 shadow-md' : 'border-gray-100 bg-white'}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                             {a.label === 'Home' ? <Home size={14} className="text-gray-400"/> : <Briefcase size={14} className="text-gray-400"/>}
+                             <span className="text-[10px] font-bold uppercase tracking-widest">{a.label}</span>
                           </div>
-                          <p className="text-xs text-gray-500 font-medium line-clamp-1">{a.fullAddress}</p>
+                          <p className="text-xs text-gray-600 font-semibold line-clamp-2 leading-relaxed">{a.fullAddress}</p>
                        </div>
                     ))}
                  </div>
               </div>
 
               <div>
-                 <h3 className="font-bold text-sm mb-4">Order History</h3>
+                 <h3 className="font-extrabold text-sm uppercase tracking-wider text-gray-400 mb-5 px-1">Order History</h3>
                  <div className="space-y-4">
                     {orders.filter(o => o.customerPhone === userPhone).map(o => (
-                       <div key={o.id} className="bg-white border border-gray-100 p-4 rounded-xl flex justify-between items-center shadow-sm">
+                       <div key={o.id} className="bg-white border border-gray-100 p-5 rounded-3xl flex justify-between items-center shadow-sm">
                           <div>
-                             <p className="text-[9px] font-bold text-gray-300 uppercase">{o.id}</p>
-                             <p className="text-lg font-bold mt-1">₹{o.total}</p>
+                             <p className="text-[9px] font-extrabold text-gray-300 uppercase tracking-widest">{o.id}</p>
+                             <p className="text-xl font-extrabold mt-1">₹{o.total}</p>
                           </div>
-                          <span className="text-[9px] font-bold uppercase bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full">{o.status}</span>
+                          <span className="text-[9px] font-bold uppercase bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full tracking-wider">{o.status}</span>
                        </div>
                     ))}
                  </div>
@@ -418,118 +536,102 @@ export default function App() {
       )}
 
       {/* Navigation Bar */}
-      <nav className="fixed bottom-6 left-6 right-6 z-[60] flex items-center justify-between px-6 py-4 glass rounded-2xl shadow-2xl border border-white/40 max-w-sm mx-auto floating-nav">
-        <button onClick={() => setView('home')} className={`p-2 rounded-lg transition-all ${view === 'home' ? 'bg-yellow-400 text-white shadow-lg shadow-yellow-100' : 'text-gray-300'}`}><TrendingUp size={22} /></button>
-        <button onClick={() => isAdmin ? setAdminTab('orders') : goToAccount()} className={`p-2 rounded-lg transition-all ${view === 'account' ? 'bg-yellow-400 text-white shadow-lg shadow-yellow-100' : 'text-gray-300'}`}><Package size={22} /></button>
-        
-        <button onClick={() => setIsCartOpen(true)} className="bg-gray-900 text-white p-4 rounded-full -mt-12 shadow-xl border-4 border-white relative active:scale-90 transition-all">
-          <ShoppingCart size={22} />
-          {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-5 h-5 rounded-full border-2 border-white flex items-center justify-center font-bold">{cart.length}</span>}
-        </button>
-        
-        <button onClick={goToAccount} className={`p-2 rounded-lg transition-all ${view === 'account' ? 'bg-yellow-400 text-white shadow-lg shadow-yellow-100' : 'text-gray-300'}`}><User size={22} /></button>
-        {isAdmin && <button onClick={() => setView('admin')} className={`p-2 rounded-lg transition-all ${view === 'admin' ? 'bg-black text-white shadow-lg' : 'text-gray-300'}`}><LayoutDashboard size={22} /></button>}
-      </nav>
-
-      {/* Product Edit Modal */}
-      {isEditModalOpen && editingProduct && (
-         <div className="fixed inset-0 bg-black/60 z-[110] flex items-end">
-            <div className="bg-white w-full rounded-t-3xl p-8 animate-slide-up pb-12 max-h-[90vh] overflow-y-auto">
-               <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold">Edit Catalogue Item</h3>
-                  <button onClick={() => setIsEditModalOpen(false)} className="bg-gray-100 p-2 rounded-full"><X size={18}/></button>
-               </div>
-               <div className="space-y-5">
-                  <div className="flex flex-col gap-1.5">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase">Product Name</label>
-                     <input type="text" className="w-full bg-gray-50 py-3.5 px-4 rounded-xl text-sm font-semibold outline-none border border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.name} onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})} />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase">Price (₹)</label>
-                     <input type="number" className="w-full bg-gray-50 py-3.5 px-4 rounded-xl text-sm font-semibold outline-none border border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: parseInt(e.target.value) || 0})} />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase">Image URL</label>
-                     <input type="text" className="w-full bg-gray-50 py-3.5 px-4 rounded-xl text-xs font-semibold outline-none border border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.image} onChange={(e) => setEditingProduct({...editingProduct, image: e.target.value})} />
-                  </div>
-                  <button onClick={handleSaveProduct} className="w-full bg-black text-white py-4 rounded-xl font-bold text-sm shadow-xl mt-4 active:scale-95 transition-all">Save to Inventory</button>
-               </div>
-            </div>
-         </div>
+      {view !== 'login' && (
+        <nav className="fixed bottom-8 left-6 right-6 z-[60] flex items-center justify-between px-7 py-5 glass rounded-[2.5rem] shadow-2xl border border-white/40 max-w-sm mx-auto floating-nav">
+          <button onClick={() => setView('home')} className={`p-2 transition-all ${view === 'home' ? 'text-yellow-500' : 'text-gray-300'}`}><TrendingUp size={24} /></button>
+          <button onClick={() => isAdmin ? setAdminTab('orders') : goToAccount()} className={`p-2 transition-all ${view === 'account' ? 'text-yellow-500' : 'text-gray-300'}`}><Package size={24} /></button>
+          
+          <button onClick={() => setIsCartOpen(true)} className="bg-gray-900 text-white p-5 rounded-full -mt-16 shadow-2xl border-4 border-white relative active:scale-90 transition-all">
+            <ShoppingCart size={24} />
+            {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-6 h-6 rounded-full border-2 border-white flex items-center justify-center font-bold">{cart.length}</span>}
+          </button>
+          
+          <button onClick={goToAccount} className={`p-2 transition-all ${view === 'account' ? 'text-yellow-500' : 'text-gray-300'}`}><User size={24} /></button>
+          {isAdmin && <button onClick={() => setView('admin')} className={`p-2 transition-all ${view === 'admin' ? 'text-black' : 'text-gray-300'}`}><LayoutDashboard size={24} /></button>}
+        </nav>
       )}
 
-      {/* Cart Modal with Re-added Payment Options */}
+      {/* Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-end">
-          <div className="bg-white w-full rounded-t-3xl p-8 animate-slide-up max-h-[95vh] overflow-y-auto pb-32">
-            <div className="flex justify-between items-center mb-8 sticky top-0 bg-white py-2 z-10">
-              <h2 className="text-xl font-bold tracking-tight">Checkout</h2>
-              <button onClick={() => setIsCartOpen(false)} className="bg-gray-50 p-2.5 rounded-full"><X size={18} /></button>
+          <div className="bg-white w-full rounded-t-[3rem] p-10 animate-slide-up max-h-[96vh] overflow-y-auto pb-40">
+            <div className="flex justify-between items-center mb-10 sticky top-0 bg-white py-2 z-10">
+              <h2 className="text-2xl font-extrabold tracking-tight">Checkout</h2>
+              <button onClick={() => setIsCartOpen(false)} className="bg-gray-100 p-3 rounded-full active:scale-90 transition-all"><X size={20} /></button>
             </div>
             
-            {cart.length === 0 ? <p className="text-center py-20 text-gray-300 font-bold">Your shopping bag is empty.</p> : (
-              <div className="space-y-6">
-                {cart.map(item => (
-                  <div key={item.id} className="flex gap-4 items-center border-b border-gray-50 pb-4">
-                    <img src={item.image} className="w-14 h-14 rounded-lg object-cover shadow-sm border border-gray-50" />
-                    <div className="flex-1">
-                      <p className="font-bold text-xs">{item.name}</p>
-                      <p className="text-[11px] font-bold text-yellow-600 mt-1">₹{item.price}</p>
+            {cart.length === 0 ? <div className="text-center py-20 flex flex-col items-center">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200"><ShoppingCart size={32}/></div>
+              <p className="text-gray-300 font-extrabold uppercase tracking-widest text-sm">Shopping bag is empty</p>
+            </div> : (
+              <div className="space-y-10">
+                <div className="space-y-6">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex gap-5 items-center pb-6 border-b border-gray-50">
+                      <img src={item.image} className="w-16 h-16 rounded-2xl object-cover shadow-sm border border-gray-100" />
+                      <div className="flex-1">
+                        <p className="font-bold text-sm text-gray-900">{item.name}</p>
+                        <p className="text-xs font-bold text-yellow-600 mt-1">₹{item.price}</p>
+                      </div>
+                      <div className="flex items-center gap-4 bg-gray-100 px-3 py-2 rounded-xl">
+                         <button onClick={() => updateQuantity(item.id, -1)} className="text-gray-400"><Minus size={14}/></button>
+                         <span className="font-extrabold text-sm w-4 text-center">{item.quantity}</span>
+                         <button onClick={() => updateQuantity(item.id, 1)} className="text-gray-900"><Plus size={14}/></button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 bg-gray-100 p-2 rounded-lg">
-                       <button onClick={() => updateQuantity(item.id, -1)}><Minus size={14}/></button>
-                       <span className="font-bold text-xs">{item.quantity}</span>
-                       <button onClick={() => updateQuantity(item.id, 1)}><Plus size={14}/></button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
                 
-                {/* Shipping Address */}
-                <div className="pt-4">
-                   <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Ship to</h3>
-                   <div className="flex gap-3 overflow-x-auto hide-scrollbar">
+                {/* Shipping Selection */}
+                <div>
+                   <h3 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-4 px-1">Delivery Destination</h3>
+                   <div className="flex gap-4 overflow-x-auto hide-scrollbar">
                       {addresses.map(a => (
-                         <div key={a.id} onClick={() => setSelectedAddressId(a.id)} className={`flex-shrink-0 w-52 p-4 rounded-xl border-2 transition-all ${selectedAddressId === a.id ? 'border-yellow-400 bg-yellow-50 shadow-sm' : 'border-gray-100 bg-white'}`}>
-                            <p className="font-bold text-[9px] uppercase mb-1">{a.label}</p>
-                            <p className="text-[10px] text-gray-500 truncate font-medium">{a.fullAddress}</p>
+                         <div key={a.id} onClick={() => setSelectedAddressId(a.id)} className={`flex-shrink-0 w-60 p-6 rounded-3xl border-2 transition-all cursor-pointer ${selectedAddressId === a.id ? 'border-yellow-400 bg-yellow-50 shadow-md' : 'border-gray-50 bg-white'}`}>
+                            <p className="font-extrabold text-[10px] uppercase tracking-widest mb-1.5">{a.label}</p>
+                            <p className="text-xs text-gray-500 truncate font-medium">{a.fullAddress}</p>
                          </div>
                       ))}
-                      <button onClick={() => setIsAddingAddress(true)} className="flex-shrink-0 w-52 border-2 border-dashed border-gray-100 rounded-xl flex items-center justify-center text-[10px] font-bold text-gray-300 transition-colors hover:border-yellow-200">+ New Address</button>
+                      <button onClick={() => setIsAddingAddress(true)} className="flex-shrink-0 w-60 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-[10px] font-extrabold text-gray-300 p-6 transition-colors hover:border-yellow-200 hover:text-yellow-600">
+                        <Plus size={20} className="mb-2"/>
+                        Add New Address
+                      </button>
                    </div>
                 </div>
 
-                {/* Restored Payment Methods Selection */}
-                <div className="pt-4 border-t border-gray-50">
-                  <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Payment Method</h3>
+                {/* Payment Choice */}
+                <div>
+                  <h3 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-4 px-1">Payment Selection</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <button 
                       onClick={() => setPaymentMethod('cod')} 
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'cod' ? 'border-yellow-400 bg-yellow-50 shadow-lg' : 'border-gray-50 bg-gray-50/50'}`}
+                      className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all shadow-sm ${paymentMethod === 'cod' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-50 bg-gray-50/50'}`}
                     >
-                      <Banknote size={24} className={paymentMethod === 'cod' ? 'text-yellow-600' : 'text-gray-300'} />
-                      <span className="text-[9px] font-bold uppercase">Cash on Delivery</span>
+                      <Banknote size={28} className={paymentMethod === 'cod' ? 'text-yellow-600' : 'text-gray-300'} />
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest">Cash</span>
                     </button>
                     <button 
                       onClick={() => setPaymentMethod('online')} 
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${paymentMethod === 'online' ? 'border-yellow-400 bg-yellow-50 shadow-lg' : 'border-gray-50 bg-gray-50/50'}`}
+                      className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all shadow-sm ${paymentMethod === 'online' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-50 bg-gray-50/50'}`}
                     >
-                      <CreditCard size={24} className={paymentMethod === 'online' ? 'text-yellow-600' : 'text-gray-300'} />
-                      <span className="text-[9px] font-bold uppercase">Online Payment</span>
+                      <CreditCard size={28} className={paymentMethod === 'online' ? 'text-yellow-600' : 'text-gray-300'} />
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest">Online</span>
                     </button>
                   </div>
                 </div>
 
+                {/* Checkout Footer */}
                 <div className="pt-6">
-                  <div className="bg-gray-900 p-6 rounded-2xl text-white flex justify-between items-center shadow-xl">
-                     <div>
-                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Grand Total</span>
-                       <p className="text-2xl font-bold mt-0.5 tracking-tighter">₹{cartTotal}</p>
+                  <div className="bg-gray-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl">
+                     <div className="flex flex-col">
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Grand Total</span>
+                       <p className="text-3xl font-black mt-1 tracking-tighter">₹{cartTotal}</p>
                      </div>
                      <button 
                       onClick={() => placeOrder(paymentMethod)} 
-                      className="bg-yellow-400 text-black px-8 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all"
+                      className="bg-yellow-400 text-black px-10 py-5 rounded-2xl font-black text-sm uppercase shadow-xl active:scale-95 transition-all"
                      >
-                        Confirm Order
+                        Confirm
                      </button>
                   </div>
                 </div>
@@ -539,22 +641,52 @@ export default function App() {
         </div>
       )}
 
-      {/* Address Form Modal */}
+      {/* Address Form */}
       {isAddingAddress && (
          <div className="fixed inset-0 bg-black/60 z-[110] flex items-end">
-            <div className="bg-white w-full rounded-t-3xl p-8 animate-slide-up pb-16">
-               <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold">New Delivery Address</h3>
-                  <button onClick={() => setIsAddingAddress(false)} className="bg-gray-100 p-2 rounded-full"><X size={18}/></button>
+            <div className="bg-white w-full rounded-t-[3rem] p-10 animate-slide-up pb-20">
+               <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-extrabold tracking-tight">New Delivery Point</h3>
+                  <button onClick={() => setIsAddingAddress(false)} className="bg-gray-100 p-3 rounded-full active:scale-90 transition-all"><X size={20}/></button>
                </div>
-               <div className="space-y-4">
-                  <div className="flex gap-2">
+               <div className="space-y-6">
+                  <div className="flex gap-3">
                      {['Home', 'Office', 'Other'].map(l => (
-                        <button key={l} onClick={() => setNewAddr({...newAddr, label: l})} className={`px-5 py-2 rounded-lg font-bold text-[10px] uppercase border transition-all ${newAddr.label === l ? 'bg-yellow-400 border-yellow-400 text-white' : 'border-gray-200 text-gray-400'}`}>{l}</button>
+                        <button key={l} onClick={() => setNewAddr({...newAddr, label: l})} className={`px-6 py-3 rounded-xl font-extrabold text-[10px] uppercase border-2 transition-all tracking-widest ${newAddr.label === l ? 'bg-yellow-400 border-yellow-400 text-white shadow-lg shadow-yellow-100' : 'border-gray-100 text-gray-400 bg-white'}`}>{l}</button>
                      ))}
                   </div>
-                  <input type="text" placeholder="Full Address / Landmark" className="w-full bg-gray-50 py-3.5 px-4 rounded-xl text-sm font-semibold outline-none border border-transparent focus:border-yellow-400 shadow-inner" value={newAddr.fullAddress} onChange={(e) => setNewAddr({...newAddr, fullAddress: e.target.value})} />
-                  <button onClick={saveAddress} className="w-full bg-black text-white py-4 rounded-xl font-bold text-sm shadow-xl mt-2 active:scale-95 transition-all">Save Address</button>
+                  <div className="space-y-4">
+                    <input type="text" placeholder="House / Flat / Street Name" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-semibold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={newAddr.fullAddress} onChange={(e) => setNewAddr({...newAddr, fullAddress: e.target.value})} />
+                    <input type="text" placeholder="Nearby Landmark (Optional)" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-semibold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={newAddr.landmark} onChange={(e) => setNewAddr({...newAddr, landmark: e.target.value})} />
+                  </div>
+                  <button onClick={saveAddress} className="w-full bg-black text-white py-5 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-2xl mt-4 active:scale-[0.98] transition-all">Save & Select</button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* Product Edit Modal (Admin) */}
+      {isEditModalOpen && editingProduct && (
+         <div className="fixed inset-0 bg-black/60 z-[110] flex items-end">
+            <div className="bg-white w-full rounded-t-[3rem] p-10 animate-slide-up pb-16 max-h-[92vh] overflow-y-auto">
+               <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xl font-extrabold tracking-tight">Inventory Management</h3>
+                  <button onClick={() => setIsEditModalOpen(false)} className="bg-gray-100 p-3 rounded-full active:scale-90 transition-all"><X size={20}/></button>
+               </div>
+               <div className="space-y-6">
+                  <div className="flex flex-col gap-2">
+                     <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Product Name</label>
+                     <input type="text" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.name} onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                     <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Price (₹)</label>
+                     <input type="number" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.price} onChange={(e) => setEditingProduct({...editingProduct, price: parseInt(e.target.value) || 0})} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                     <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">Thumbnail URL</label>
+                     <input type="text" className="w-full bg-gray-50 py-4 px-6 rounded-2xl text-[10px] font-bold outline-none border-2 border-transparent focus:border-yellow-400 shadow-inner" value={editingProduct.image} onChange={(e) => setEditingProduct({...editingProduct, image: e.target.value})} />
+                  </div>
+                  <button onClick={handleSaveProduct} className="w-full bg-black text-white py-5 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-2xl mt-4 active:scale-[0.98] transition-all">Apply Changes</button>
                </div>
             </div>
          </div>
