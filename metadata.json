@@ -1,0 +1,8 @@
+{
+  "name": "Muskan PCO & Photostate",
+  "description": "Premium local stationery delivery and document services strictly for Gonda city. Order pens, notebooks, and printouts with lightning-fast delivery.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
